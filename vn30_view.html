@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VN30 Tick Summary</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0d1117;color:#c9d1d9;font-family:Consolas,'Courier New',monospace;font-size:12px;padding:12px}
+h2{color:#58a6ff;font-size:14px;letter-spacing:1px;margin-bottom:10px}
+
+/* TOOLBAR */
+.bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#161b22;border:1px solid #30363d;border-radius:6px;padding:9px 12px;margin-bottom:10px}
+.bar label{color:#8b949e;font-size:11px}
+.qbtns{display:flex;gap:5px;flex-wrap:wrap}
+.qbtn{background:#21262d;border:1px solid #30363d;color:#8b949e;padding:3px 9px;border-radius:4px;cursor:pointer;font-size:11px;font-family:inherit;transition:all .15s}
+.qbtn:hover,.qbtn.on{border-color:#58a6ff;color:#58a6ff;background:#0d2044}
+.qbtn.on{background:#1f6feb;color:#fff;border-color:#388bfd}
+.btn{background:#1f6feb;border:none;color:#fff;padding:5px 14px;border-radius:4px;cursor:pointer;font-family:inherit;font-size:12px;font-weight:600}
+.btn:hover{opacity:.85}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* STATUS */
+.sts{font-size:11px;color:#8b949e;margin-bottom:8px;min-height:16px}
+.sts.ok{color:#3fb950}.sts.err{color:#f85149}
+.spin{display:inline-block;width:10px;height:10px;border:2px solid #30363d;border-top-color:#58a6ff;border-radius:50%;animation:sp .6s linear infinite;vertical-align:-1px;margin-right:4px}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+/* CARDS */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:6px;margin-bottom:10px}
+.card{background:#161b22;border:1px solid #30363d;border-radius:5px;padding:8px 11px}
+.card .lbl{color:#8b949e;font-size:10px;text-transform:uppercase;letter-spacing:.3px;margin-bottom:3px}
+.card .val{font-size:16px;font-weight:700}
+.card .sub{font-size:10px;color:#8b949e;margin-top:2px}
+.buy{color:#3fb950}.sell{color:#f85149}
+.pos{color:#3fb950;font-weight:700}.neg{color:#f85149;font-weight:700}
+
+/* TABLE */
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+thead th{background:#161b22;color:#8b949e;padding:6px 8px;text-align:right;border-bottom:1px solid #21262d;white-space:nowrap;font-weight:400;font-size:11px}
+thead th:first-child{text-align:left}
+tbody td{padding:4px 8px;text-align:right;border-bottom:1px solid #0d1117;white-space:nowrap}
+tbody td:first-child{text-align:left;font-weight:600;color:#58a6ff}
+tbody tr:hover td{background:#161b22}
+.tot td{background:#1c2128!important;border-top:1px solid #388bfd!important;font-weight:700}
+.tot td:first-child{color:#ffa657}
+.bar-cell{display:flex;align-items:center;gap:4px;justify-content:flex-end}
+.bg{width:44px;height:4px;background:#21262d;border-radius:2px;overflow:hidden}
+.bf{height:100%;border-radius:2px}
+.badge{font-size:10px;padding:1px 5px;border-radius:3px;white-space:nowrap}
+.M{background:#0d3b1e;color:#3fb950}.B{background:#3b0d0d;color:#f85149}
+
+/* UPDATED */
+.upd{font-size:10px;color:#484f58;margin-top:8px}
+</style>
+</head>
+<body>
+
+<h2>⬛ VN30 TICK SUMMARY</h2>
+
+<div class="bar">
+  <label>NGÀY</label>
+  <div class="qbtns" id="qbtns"></div>
+  <button class="btn" id="btnLoad" onclick="loadSelected()">▶ Xem</button>
+</div>
+
+<div class="sts" id="sts"></div>
+
+<div class="cards" id="cards" style="display:none">
+  <div class="card"><div class="lbl">Tổng lệnh</div><div class="val" id="cT">—</div><div class="sub" id="cTS"></div></div>
+  <div class="card"><div class="lbl">KL Mua (lot)</div><div class="val buy" id="cBV">—</div></div>
+  <div class="card"><div class="lbl">GTGD Mua (tỷ)</div><div class="val buy" id="cBVal">—</div></div>
+  <div class="card"><div class="lbl">KL Bán (lot)</div><div class="val sell" id="cSV">—</div></div>
+  <div class="card"><div class="lbl">GTGD Bán (tỷ)</div><div class="val sell" id="cSVal">—</div></div>
+  <div class="card"><div class="lbl">Net GTGD (tỷ)</div><div class="val" id="cNet">—</div></div>
+</div>
+
+<div class="tw">
+<table id="tbl" style="display:none">
+  <thead><tr>
+    <th>Mã</th>
+    <th>Lệnh mua</th><th>Lệnh bán</th><th>Tổng lệnh</th>
+    <th>KL Mua (lot)</th><th>GTGD Mua (tỷ)</th>
+    <th>KL Bán (lot)</th><th>GTGD Bán (tỷ)</th>
+    <th>Net (tỷ)</th><th>Dominant</th>
+  </tr></thead>
+  <tbody id="tbody"></tbody>
+</table>
+</div>
+<div class="upd" id="upd"></div>
+
+<script>
+const REPO   = "ps20260218/footprint-data";
+const RAW    = `https://raw.githubusercontent.com/${REPO}/main`;
+const API    = `https://api.github.com/repos/${REPO}/contents/data`;
+
+let selectedDate = "";
+
+// ── LIST available JSON files ─────────────────────────────────────────────
+async function loadDates() {
+  setS('<span class="spin"></span>Đang tải danh sách ngày...');
+  try {
+    const r = await fetch(API + "?t=" + Date.now());
+    const files = await r.json();
+    const dates = files
+      .filter(f => f.name.match(/^vn30_\d{4}-\d{2}-\d{2}\.json$/))
+      .map(f => f.name.replace("vn30_","").replace(".json",""))
+      .sort().reverse().slice(0, 10);
+
+    if (!dates.length) { setS("Chưa có data. Chạy vn30_push.py trước.", "err"); return; }
+
+    const qw = document.getElementById('qbtns');
+    qw.innerHTML = "";
+    dates.forEach((d, i) => {
+      const [y,m,dd] = d.split('-');
+      const btn = document.createElement('button');
+      btn.className = 'qbtn' + (i===0?' on':'');
+      btn.textContent = `${+m}/${+dd}`;
+      btn.dataset.date = d;
+      btn.onclick = () => { selectedDate = d; setActive(d); };
+      qw.appendChild(btn);
+    });
+    selectedDate = dates[0];
+    setS("");
+    loadSelected();
+  } catch(e) {
+    setS("Lỗi tải danh sách: " + e.message, "err");
+  }
+}
+
+function setActive(d) {
+  document.querySelectorAll('.qbtn').forEach(b => b.classList.toggle('on', b.dataset.date===d));
+}
+
+// ── LOAD JSON for selected date ───────────────────────────────────────────
+async function loadSelected() {
+  if (!selectedDate) return;
+  const btn = document.getElementById('btnLoad');
+  btn.disabled = true;
+  setS(`<span class="spin"></span>Đang tải dữ liệu ${selectedDate}...`);
+  document.getElementById('cards').style.display = 'none';
+  document.getElementById('tbl').style.display = 'none';
+
+  try {
+    const url = `${RAW}/data/vn30_${selectedDate}.json?t=${Date.now()}`;
+    const r = await fetch(url);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const d = await r.json();
+    render(d);
+    setS(`✅ Dữ liệu ngày ${d.date} — cập nhật lúc ${d.updated}`, "ok");
+  } catch(e) {
+    setS("Lỗi: " + e.message, "err");
+  }
+  btn.disabled = false;
+}
+
+// ── RENDER ────────────────────────────────────────────────────────────────
+function fmt(n){ return Number(n).toLocaleString('vi-VN'); }
+function fmtB(n){ return Number(n).toFixed(2); }
+function $(id){ return document.getElementById(id); }
+function setS(msg, cls=''){
+  const el=$('sts'); el.className='sts '+(cls||''); el.innerHTML=msg;
+}
+
+function render(d) {
+  const t = d.total;
+  const net = t.buyVal - t.sellVal;
+
+  $('cT').textContent    = fmt(t.ticks);
+  $('cTS').textContent   = `Mua: ${fmt(t.buyTicks)} | Bán: ${fmt(t.sellTicks)}`;
+  $('cBV').textContent   = fmt(t.buyVol);
+  $('cSV').textContent   = fmt(t.sellVol);
+  $('cBVal').textContent = fmtB(t.buyVal);
+  $('cSVal').textContent = fmtB(t.sellVal);
+  const ne = $('cNet');
+  ne.textContent = (net>=0?'+':'')+fmtB(net);
+  ne.className = 'val '+(net>=0?'pos':'neg');
+  $('cards').style.display = 'grid';
+
+  const sorted = [...d.rows].sort((a,b)=>(b.buyVal+b.sellVal)-(a.buyVal+a.sellVal));
+  const maxV   = Math.max(...sorted.map(r=>r.buyVal+r.sellVal), 1);
+
+  let html = '';
+  for (const r of sorted) {
+    const n   = r.buyVal - r.sellVal;
+    const pct = Math.round((r.buyVal+r.sellVal)/maxV*100);
+    const col = n>=0?'#3fb950':'#f85149';
+    const side= n>=0?'M':'B';
+    html += `<tr>
+      <td>${r.sym}</td>
+      <td class="buy">${fmt(r.buyTicks)}</td>
+      <td class="sell">${fmt(r.sellTicks)}</td>
+      <td>${fmt(r.ticks)}</td>
+      <td class="buy">${fmt(r.buyVol)}</td>
+      <td class="buy">${fmtB(r.buyVal)}</td>
+      <td class="sell">${fmt(r.sellVol)}</td>
+      <td class="sell">${fmtB(r.sellVal)}</td>
+      <td class="${n>=0?'pos':'neg'}">${(n>=0?'+':'')+fmtB(n)}</td>
+      <td><div class="bar-cell">
+        <span class="badge ${side}">${side==='M'?'▲ MUA':'▼ BÁN'}</span>
+        <div class="bg"><div class="bf" style="width:${pct}%;background:${col}"></div></div>
+      </div></td>
+    </tr>`;
+  }
+  // totals row
+  html += `<tr class="tot">
+    <td>VN30 TỔNG</td>
+    <td class="buy">${fmt(t.buyTicks)}</td>
+    <td class="sell">${fmt(t.sellTicks)}</td>
+    <td>${fmt(t.ticks)}</td>
+    <td class="buy">${fmt(t.buyVol)}</td>
+    <td class="buy">${fmtB(t.buyVal)}</td>
+    <td class="sell">${fmt(t.sellVol)}</td>
+    <td class="sell">${fmtB(t.sellVal)}</td>
+    <td class="${net>=0?'pos':'neg'}">${(net>=0?'+':'')+fmtB(net)}</td>
+    <td></td>
+  </tr>`;
+
+  $('tbody').innerHTML = html;
+  $('tbl').style.display = 'table';
+  $('upd').textContent = `Nguồn: github.com/${REPO}`;
+}
+
+loadDates();
+</script>
+</body>
+</html>
